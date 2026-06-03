@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "title": "Producto 1",
+    "description": "Descripci�n del producto",
+    "code": "ABC123",
+    "price": 100,
+    "status": true,
+    "stock": 10,
+    "category": "Categor�a A",
+    "thumbnails": []
+  },
+  {
+    "id": 2,
+    "title": "Producto 2",
+    "description": "Descripci�n 2",
+    "code": "XYZ789",
+    "price": 200,
+    "status": true,
+    "stock": 5,
+    "category": "Cat B",
+    "thumbnails": []
+  }
+]
