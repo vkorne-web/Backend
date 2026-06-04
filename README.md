@@ -2,6 +2,14 @@
 
 Servidor Node.js + Express para la gestión de productos y carritos de compra. Persistencia mediante archivos JSON.
 
+## Configuración
+
+Crear un archivo .env en la raíz del proyecto:
+
+`env
+PORT=8080
+`
+
 ## Instalación
 
 ```bash
