@@ -1,0 +1,48 @@
+﻿<h2>Productos en Tiempo Real</h2>
+
+<div class="rt-container">
+    <div class="rt-form">
+        <h3>Agregar Producto</h3>
+        <form id="productForm">
+            <input type="text" id="title" placeholder="Titulo" required>
+            <input type="text" id="description" placeholder="Descripcion" required>
+            <input type="text" id="code" placeholder="Codigo" required>
+            <input type="number" id="price" placeholder="Precio" step="0.01" required>
+            <input type="number" id="stock" placeholder="Stock" required>
+            <input type="text" id="category" placeholder="Categoria" required>
+            <label>
+                <input type="checkbox" id="status" checked> Activo
+            </label>
+            <button type="submit">Agregar Producto</button>
+        </form>
+        <h3>Eliminar Producto</h3>
+        <form id="deleteForm">
+            <input type="number" id="deleteId" placeholder="ID del producto" required>
+            <button type="submit">Eliminar Producto</button>
+        </form>
+    </div>
+    <div class="rt-products">
+        <h3>Listado de Productos</h3>
+        <div id="productList" class="product-list">
+            {{#if products.length}}
+                {{#each products}}
+                    <div class="product-card" data-id="{{this.id}}">
+                        <h3>{{this.title}}</h3>
+                        <p class="product-category">Categoria: {{this.category}}</p>
+                        <p class="product-description">{{this.description}}</p>
+                        <p class="product-code">Codigo: {{this.code}}</p>
+                        <p class="product-price">$ {{this.price}}</p>
+                        <p class="product-stock">Stock: {{this.stock}}</p>
+                        <p class="product-status">Estado: {{#if this.status}}Disponible{{else}}No disponible{{/if}}</p>
+                        <button class="btn-delete" data-id="{{this.id}}">Eliminar</button>
+                    </div>
+                {{/each}}
+            {{else}}
+                <p class="empty-message">No hay productos disponibles.</p>
+            {{/if}}
+        </div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/realtime.js"></script>
