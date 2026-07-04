@@ -1,15 +1,13 @@
-﻿const socket = io();
+const socket = io();
 
 const productList = document.getElementById("productList");
 const productForm = document.getElementById("productForm");
 const deleteForm = document.getElementById("deleteForm");
 
-// Escuchar actualizacion de productos en tiempo real
 socket.on("updateProducts", (products) => {
     renderProducts(products);
 });
 
-// Agregar producto
 productForm.addEventListener("submit", (e) => {
     e.preventDefault();
 
@@ -28,7 +26,6 @@ productForm.addEventListener("submit", (e) => {
     document.getElementById("status").checked = true;
 });
 
-// Eliminar producto por formulario
 deleteForm.addEventListener("submit", (e) => {
     e.preventDefault();
 
@@ -37,7 +34,6 @@ deleteForm.addEventListener("submit", (e) => {
     deleteForm.reset();
 });
 
-// Eliminar producto por boton en la tarjeta
 productList.addEventListener("click", (e) => {
     if (e.target.classList.contains("btn-delete")) {
         const id = parseInt(e.target.dataset.id);
@@ -47,25 +43,23 @@ productList.addEventListener("click", (e) => {
 
 function renderProducts(products) {
     if (!products || products.length === 0) {
-        productList.innerHTML = \'<p class="empty-message">No hay productos disponibles.</p>\';
+        productList.innerHTML = "<p class=\"empty-message\">No hay productos disponibles.</p>";
         return;
     }
 
     let html = "";
     products.forEach((p) => {
         const statusText = p.status ? "Disponible" : "No disponible";
-        html += \`
-            <div class="product-card" data-id="\${p.id}">
-                <h3>\${p.title}</h3>
-                <p class="product-category">Categoria: \${p.category}</p>
-                <p class="product-description">\${p.description}</p>
-                <p class="product-code">Codigo: \${p.code}</p>
-                <p class="product-price">$ \${p.price}</p>
-                <p class="product-stock">Stock: \${p.stock}</p>
-                <p class="product-status">Estado: \${statusText}</p>
-                <button class="btn-delete" data-id="\${p.id}">Eliminar</button>
-            </div>
-        \`;
+        html += "<div class=\"product-card\" data-id=\"" + p.id + "\">" +
+            "<h3>" + p.title + "</h3>" +
+            "<p class=\"product-category\">Categoria: " + p.category + "</p>" +
+            "<p class=\"product-description\">" + p.description + "</p>" +
+            "<p class=\"product-code\">Codigo: " + p.code + "</p>" +
+            "<p class=\"product-price\">$ " + p.price + "</p>" +
+            "<p class=\"product-stock\">Stock: " + p.stock + "</p>" +
+            "<p class=\"product-status\">Estado: " + statusText + "</p>" +
+            "<button class=\"btn-delete\" data-id=\"" + p.id + "\">Eliminar</button>" +
+            "</div>";
     });
     productList.innerHTML = html;
 }
