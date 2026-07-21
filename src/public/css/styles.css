@@ -240,3 +240,137 @@ h2 {
         position: static;
     }
 }
+
+/* Filtros / paginacion / botones / carrito (entrega final) */
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.filters input,
+.filters select {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.filters button {
+    padding: 0.5rem 1rem;
+    background: #2a2a72;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.cart-link {
+    margin-bottom: 1.2rem;
+}
+
+.btn {
+    display: inline-block;
+    padding: 0.5rem 0.9rem;
+    background: #2a2a72;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.3s;
+}
+
+.btn:hover {
+    background: #4a4a9e;
+}
+
+.btn-add {
+    background: #ff6b35;
+}
+
+.btn-add:hover {
+    background: #e85a24;
+}
+
+.btn-remove,
+.btn-clear {
+    background: #ff4444;
+}
+
+.btn-remove:hover,
+.btn-clear:hover {
+    background: #cc0000;
+}
+
+.btn-disabled {
+    background: #bbb;
+    cursor: not-allowed;
+}
+
+.product-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.page-info {
+    font-weight: 600;
+    color: #2a2a72;
+}
+
+.product-detail {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 600px;
+}
+
+.product-detail p {
+    margin-bottom: 0.6rem;
+}
+
+.cart-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.cart-table th,
+.cart-table td {
+    padding: 0.8rem;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+.cart-table thead {
+    background: #2a2a72;
+    color: white;
+}
+
+.cart-table tfoot td {
+    background: #f0f0f0;
+    font-size: 1.1rem;
+}
+
+.cart-id {
+    color: #888;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}

@@ -4,13 +4,38 @@ const ProductManager = require('../managers/ProductManager');
 const router = Router();
 const productManager = new ProductManager();
 
-// GET /api/products - Listar todos los productos
+// GET /api/products - Listar productos con paginacion, filtros y ordenamiento
+// Query params: limit (10), page (1), sort (asc/desc por precio), query (categoria o disponibilidad)
 router.get('/', async (req, res) => {
     try {
-        const products = await productManager.getProducts();
-        res.json(products);
+        const { limit = 10, page = 1, sort, query } = req.query;
+
+        const result = await productManager.getProducts({ limit, page, sort, query });
+
+        // Construimos los links de paginacion conservando los mismos filtros/orden
+        const buildLink = (targetPage) => {
+            const params = new URLSearchParams();
+            params.set('limit', limit);
+            params.set('page', targetPage);
+            if (sort) params.set('sort', sort);
+            if (query) params.set('query', query);
+            return `/api/products?${params.toString()}`;
+        };
+
+        res.json({
+            status: 'success',
+            payload: result.docs,
+            totalPages: result.totalPages,
+            prevPage: result.prevPage,
+            nextPage: result.nextPage,
+            page: result.page,
+            hasPrevPage: result.hasPrevPage,
+            hasNextPage: result.hasNextPage,
+            prevLink: result.hasPrevPage ? buildLink(result.prevPage) : null,
+            nextLink: result.hasNextPage ? buildLink(result.nextPage) : null
+        });
     } catch (error) {
-        res.status(500).json({ error: 'Error al obtener los productos' });
+        res.status(500).json({ status: 'error', error: 'Error al obtener los productos' });
     }
 });
 
@@ -18,8 +43,7 @@ router.get('/', async (req, res) => {
 router.get('/:pid', async (req, res) => {
     try {
         const { pid } = req.params;
-        const id = Number(pid);
-        const product = await productManager.getProductById(id);
+        const product = await productManager.getProductById(pid);
         res.json(product);
     } catch (error) {
         res.status(404).json({ error: error.message });
@@ -50,8 +74,7 @@ router.post('/', async (req, res) => {
 router.put('/:pid', async (req, res) => {
     try {
         const { pid } = req.params;
-        const id = Number(pid);
-        const updatedProduct = await productManager.updateProduct(id, req.body);
+        const updatedProduct = await productManager.updateProduct(pid, req.body);
         res.json(updatedProduct);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -62,8 +85,7 @@ router.put('/:pid', async (req, res) => {
 router.delete('/:pid', async (req, res) => {
     try {
         const { pid } = req.params;
-        const id = Number(pid);
-        const deletedProduct = await productManager.deleteProduct(id);
+        const deletedProduct = await productManager.deleteProduct(pid);
         res.json({ message: 'Producto eliminado correctamente', product: deletedProduct });
     } catch (error) {
         res.status(404).json({ error: error.message });

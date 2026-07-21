@@ -1,0 +1,54 @@
+<h2>Productos</h2>
+
+{{! Filtros y ordenamiento }}
+<form class="filters" method="GET" action="/products">
+    <input type="text" name="query" placeholder="Categoria (o status:true)" />
+    <select name="sort">
+        <option value="">Orden</option>
+        <option value="asc">Precio: menor a mayor</option>
+        <option value="desc">Precio: mayor a menor</option>
+    </select>
+    <input type="number" name="limit" placeholder="Limit" min="1" />
+    <button type="submit">Filtrar</button>
+</form>
+
+<p class="cart-link">Carrito actual: <a href="/carts/{{cartId}}">Ver mi carrito</a></p>
+
+{{#if products.length}}
+    <div class="product-list">
+        {{#each products}}
+            <div class="product-card">
+                <h3><a href="/products/{{this._id}}">{{this.title}}</a></h3>
+                <p class="product-category">Categoria: {{this.category}}</p>
+                <p class="product-price">$ {{this.price}}</p>
+                <p class="product-stock">Stock: {{this.stock}}</p>
+                <p class="product-status">Estado: {{#if this.status}}Disponible{{else}}No disponible{{/if}}</p>
+                <div class="product-actions">
+                    <a class="btn" href="/products/{{this._id}}">Ver detalle</a>
+                    <button class="btn btn-add" data-product="{{this._id}}" data-cart="{{../cartId}}">Agregar al carrito</button>
+                </div>
+            </div>
+        {{/each}}
+    </div>
+
+    {{! Paginacion }}
+    <div class="pagination">
+        {{#if prevLink}}
+            <a class="btn" href="{{prevLink}}">&laquo; Anterior</a>
+        {{else}}
+            <span class="btn btn-disabled">&laquo; Anterior</span>
+        {{/if}}
+
+        <span class="page-info">Pagina {{page}} de {{totalPages}}</span>
+
+        {{#if nextLink}}
+            <a class="btn" href="{{nextLink}}">Siguiente &raquo;</a>
+        {{else}}
+            <span class="btn btn-disabled">Siguiente &raquo;</span>
+        {{/if}}
+    </div>
+{{else}}
+    <p class="empty-message">No hay productos disponibles.</p>
+{{/if}}
+
+<script src="/js/addToCart.js"></script>

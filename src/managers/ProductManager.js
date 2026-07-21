@@ -1,34 +1,40 @@
-const fs = require('fs');
-const path = require('path');
+const ProductModel = require("../models/product.model");
 
 class ProductManager {
-    constructor() {
-        this.path = path.resolve(__dirname, '../../data/products.json');
-        this.init();
-    }
-
-    async init() {
-        try {
-            if (!fs.existsSync(this.path)) {
-                await fs.promises.writeFile(this.path, JSON.stringify([], null, 2));
+    // Devuelve productos con paginacion, filtros y ordenamiento.
+    // params: { limit, page, sort, query }
+    //   - limit: cantidad de elementos por pagina (default 10)
+    //   - page: pagina solicitada (default 1)
+    //   - sort: "asc" | "desc" -> ordena por precio (si no viene, no ordena)
+    //   - query: filtro. Puede ser "category:valor" o "status:true/false".
+    //            Si viene un texto suelto se interpreta como categoria.
+    async getProducts({ limit = 10, page = 1, sort, query } = {}) {
+        // Armado del filtro a partir del query param
+        const filter = {};
+        if (query) {
+            const [key, rawValue] = query.includes(":") ? query.split(":") : ["category", query];
+            const value = rawValue ?? "";
+            if (key === "status") {
+                filter.status = value === "true";
+            } else if (key === "category") {
+                filter.category = value;
             }
-        } catch (error) {
-            console.error('Error inicializando ProductManager:', error);
         }
-    }
 
-    async getProducts() {
-        try {
-            const data = await fs.promises.readFile(this.path, 'utf-8');
-            return JSON.parse(data);
-        } catch (error) {
-            return [];
-        }
+        // Armado del ordenamiento por precio
+        const options = {
+            limit: Number(limit),
+            page: Number(page),
+            lean: true // para que Handlebars pueda renderizar los objetos
+        };
+        if (sort === "asc") options.sort = { price: 1 };
+        if (sort === "desc") options.sort = { price: -1 };
+
+        return await ProductModel.paginate(filter, options);
     }
 
     async getProductById(id) {
-        const products = await this.getProducts();
-        const product = products.find(p => p.id === id);
+        const product = await ProductModel.findById(id).lean();
         if (!product) {
             throw new Error(`Producto con id ${id} no encontrado`);
         }
@@ -37,28 +43,17 @@ class ProductManager {
 
     async addProduct({ title, description, code, price, status = true, stock, category, thumbnails = [] }) {
         // Validar campos obligatorios
-        if (!title || !description || !code || !price || !stock || !category) {
-            throw new Error('Todos los campos son obligatorios excepto thumbnails y status');
+        if (!title || !description || !code || price == null || stock == null || !category) {
+            throw new Error("Todos los campos son obligatorios excepto thumbnails y status");
         }
 
-        const products = await this.getProducts();
-
-        // Validar que el código no se repita
-        const existingCode = products.find(p => p.code === code);
+        // Validar que el codigo no se repita
+        const existingCode = await ProductModel.findOne({ code });
         if (existingCode) {
-            throw new Error(`El código "${code}" ya existe para otro producto`);
+            throw new Error(`El codigo "${code}" ya existe para otro producto`);
         }
 
-        // Generar ID autoincremental
-        let newId;
-        if (products.length === 0) {
-            newId = 1;
-        } else {
-            newId = products[products.length - 1].id + 1;
-        }
-
-        const newProduct = {
-            id: newId,
+        const newProduct = await ProductModel.create({
             title,
             description,
             code,
@@ -67,39 +62,31 @@ class ProductManager {
             stock,
             category,
             thumbnails
-        };
+        });
 
-        products.push(newProduct);
-        await fs.promises.writeFile(this.path, JSON.stringify(products, null, 2));
-        return newProduct;
+        return newProduct.toObject();
     }
 
     async updateProduct(id, updatedFields) {
-        const products = await this.getProducts();
-        const index = products.findIndex(p => p.id === id);
+        // No permitir actualizar el id
+        const { _id, id: _ignore, ...fieldsToUpdate } = updatedFields;
 
-        if (index === -1) {
+        const product = await ProductModel.findByIdAndUpdate(id, fieldsToUpdate, {
+            returnDocument: "after",
+            runValidators: true
+        }).lean();
+
+        if (!product) {
             throw new Error(`Producto con id ${id} no encontrado`);
         }
-
-        // No permitir actualizar ni eliminar el id
-        const { id: _, ...fieldsToUpdate } = updatedFields;
-
-        products[index] = { ...products[index], ...fieldsToUpdate };
-        await fs.promises.writeFile(this.path, JSON.stringify(products, null, 2));
-        return products[index];
+        return product;
     }
 
     async deleteProduct(id) {
-        const products = await this.getProducts();
-        const index = products.findIndex(p => p.id === id);
-
-        if (index === -1) {
+        const deletedProduct = await ProductModel.findByIdAndDelete(id).lean();
+        if (!deletedProduct) {
             throw new Error(`Producto con id ${id} no encontrado`);
         }
-
-        const deletedProduct = products.splice(index, 1)[0];
-        await fs.promises.writeFile(this.path, JSON.stringify(products, null, 2));
         return deletedProduct;
     }
 }

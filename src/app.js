@@ -5,6 +5,7 @@ const path = require("path");
 const { engine } = require("express-handlebars");
 require("dotenv").config();
 
+const connectDB = require("./config/db");
 const productsRouter = require("./routes/products.router");
 const cartsRouter = require("./routes/carts.router");
 const viewsRouter = require("./routes/views/index.router");
@@ -12,6 +13,9 @@ const ProductManager = require("./managers/ProductManager");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// Conexion a MongoDB Atlas
+connectDB();
 
 const productManager = new ProductManager();
 
@@ -40,13 +44,13 @@ const io = new Server(httpServer);
 io.on("connection", async (socket) => {
     console.log("Cliente conectado:", socket.id);
 
-    const products = await productManager.getProducts();
+    const { docs: products } = await productManager.getProducts({ limit: 100 });
     socket.emit("updateProducts", products);
 
     socket.on("addProduct", async (productData) => {
         try {
             const newProduct = await productManager.addProduct(productData);
-            const updatedProducts = await productManager.getProducts();
+            const { docs: updatedProducts } = await productManager.getProducts({ limit: 100 });
             io.emit("updateProducts", updatedProducts);
             console.log("Producto agregado:", newProduct.title);
         } catch (error) {
@@ -57,7 +61,7 @@ io.on("connection", async (socket) => {
     socket.on("deleteProduct", async (id) => {
         try {
             const deleted = await productManager.deleteProduct(id);
-            const updatedProducts = await productManager.getProducts();
+            const { docs: updatedProducts } = await productManager.getProducts({ limit: 100 });
             io.emit("updateProducts", updatedProducts);
             console.log("Producto eliminado ID:", id);
         } catch (error) {

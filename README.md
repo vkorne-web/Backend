@@ -1,10 +1,12 @@
-﻿# Backend - API de Productos y Carritos + WebSockets
+# Backend - API de Productos y Carritos (MongoDB) + WebSockets
 
-Servidor Node.js + Express con Handlebars y Socket.io para la gestion de productos y carritos de compra. Persistencia mediante archivos JSON e interfaz en tiempo real con WebSockets.
+Servidor Node.js + Express con Handlebars y Socket.io para la gestion de productos y carritos de compra. **Persistencia con MongoDB (Mongoose)**, consultas de productos con paginacion, filtros y ordenamiento, y gestion de carrito con referencias y `populate`.
 
 ## Tecnologias
 
 - **Express** - Framework web
+- **MongoDB + Mongoose** - Persistencia principal
+- **mongoose-paginate-v2** - Paginacion de productos
 - **Express-Handlebars** - Motor de plantillas
 - **Socket.io** - Comunicacion en tiempo real
 - **dotenv** - Variables de entorno
@@ -21,7 +23,18 @@ Crear un archivo `.env` en la raiz del proyecto:
 
 ```
 PORT=8080
+MONGO_URL=mongodb+srv://USUARIO:PASSWORD@CLUSTER.mongodb.net/ecommerce?retryWrites=true&w=majority
 ```
+
+Reemplazar `MONGO_URL` por tu cadena de conexion de MongoDB Atlas.
+
+## Carga de datos de prueba (opcional)
+
+```bash
+npm run seed
+```
+
+Inserta 24 productos variados (distintas categorias, precios y disponibilidad) para probar paginacion, filtros y ordenamiento.
 
 ## Ejecucion
 
@@ -37,78 +50,106 @@ El servidor se levanta en `http://localhost:8080`.
 
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
-| GET | `/api/products` | Lista todos los productos |
+| GET | `/api/products` | Lista productos con paginacion, filtros y orden |
 | GET | `/api/products/:pid` | Obtiene un producto por ID |
-| POST | `/api/products` | Crea un nuevo producto (ID autogenerado) |
-| PUT | `/api/products/:pid` | Actualiza un producto (no modifica el ID) |
+| POST | `/api/products` | Crea un nuevo producto |
+| PUT | `/api/products/:pid` | Actualiza un producto |
 | DELETE | `/api/products/:pid` | Elimina un producto |
 
-#### Ejemplo POST /api/products
+#### GET /api/products - Query params
+
+| Param | Default | Descripcion |
+|-------|---------|-------------|
+| `limit` | 10 | Cantidad de elementos por pagina |
+| `page` | 1 | Pagina solicitada |
+| `sort` | (ninguno) | `asc` / `desc` -> ordena por precio |
+| `query` | (general) | Filtro. `category:Ropa` o `status:true`. Un texto suelto se interpreta como categoria |
+
+Ejemplo: `/api/products?limit=5&page=2&sort=asc&query=category:Hogar`
+
+Respuesta:
 
 ```json
 {
-  "title": "Producto 1",
-  "description": "Descripcion del producto",
-  "code": "ABC123",
-  "price": 100,
-  "stock": 10,
-  "category": "Categoria A"
+  "status": "success",
+  "payload": [ /* productos */ ],
+  "totalPages": 3,
+  "prevPage": 1,
+  "nextPage": 3,
+  "page": 2,
+  "hasPrevPage": true,
+  "hasNextPage": true,
+  "prevLink": "/api/products?limit=5&page=1&sort=asc&query=category:Hogar",
+  "nextLink": "/api/products?limit=5&page=3&sort=asc&query=category:Hogar"
 }
 ```
-
-Campos opcionales: `status` (default: true), `thumbnails` (array de strings).
 
 ### Carritos (`/api/carts`)
 
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
-| POST | `/api/carts` | Crea un nuevo carrito (ID autogenerado) |
-| GET | `/api/carts/:cid` | Lista los productos del carrito |
-| POST | `/api/carts/:cid/product/:pid` | Agrega un producto al carrito (incrementa quantity si ya existe) |
+| POST | `/api/carts` | Crea un nuevo carrito |
+| GET | `/api/carts/:cid` | Lista los productos del carrito (con `populate`) |
+| POST | `/api/carts/:cid/products/:pid` | Agrega un producto (incrementa quantity si ya existe) |
+| PUT | `/api/carts/:cid` | Reemplaza todos los productos con un arreglo enviado en el body |
+| PUT | `/api/carts/:cid/products/:pid` | Actualiza SOLO la cantidad (`quantity` en el body) |
+| DELETE | `/api/carts/:cid/products/:pid` | Elimina un producto del carrito |
+| DELETE | `/api/carts/:cid` | Vacia el carrito (elimina todos los productos) |
+
+`PUT /api/carts/:cid` espera:
+
+```json
+{ "products": [ { "product": "<idProducto>", "quantity": 2 } ] }
+```
 
 ## Vistas con Handlebars
 
 | Ruta | Vista | Descripcion |
 |------|-------|-------------|
-| `/` | `home.handlebars` | Listado de productos renderizado del lado servidor |
-| `/realtimeproducts` | `realTimeProducts.handlebars` | Listado en tiempo real con formularios para agregar/eliminar productos via WebSocket |
+| `/` | `home.handlebars` | Listado simple de productos |
+| `/products` | `index.handlebars` | Listado con paginacion, filtros y boton "agregar al carrito" |
+| `/products/:pid` | `productDetail.handlebars` | Detalle del producto con boton "agregar al carrito" |
+| `/carts/:cid` | `cart.handlebars` | Productos de un carrito especifico (solo los suyos) |
+| `/realtimeproducts` | `realTimeProducts.handlebars` | Listado en tiempo real via WebSocket |
 
-## Funcionamiento de WebSockets
+## Modelos
 
-En la vista `/realtimeproducts`:
-
-- Al **conectarse**, el servidor envia la lista actual de productos
-- Al **agregar un producto** mediante el formulario, se emite un evento `addProduct` al servidor, que lo guarda y notifica a todos los clientes conectados
-- Al **eliminar un producto** (por formulario o boton en la tarjeta), se emite `deleteProduct` al servidor, que lo elimina y notifica a todos los clientes
-- La lista se actualiza automaticamente en todos los navegadores sin necesidad de recargar la pagina
+- **products**: `title, description, code (unico), price, status, stock, category, thumbnails`. Usa el plugin `mongoose-paginate-v2`.
+- **carts**: `products: [{ product: ObjectId ref 'products', quantity }]`. El `product` es una **referencia** al modelo de productos; `GET /api/carts/:cid` los trae completos mediante `populate`.
 
 ## Estructura del proyecto
 
 ```
 Backend/
-├── data/
-│   ├── products.json
-│   └── carts.json
 ├── src/
-│   ├── app.js                    # Servidor principal con Express + Socket.io
+│   ├── app.js                    # Servidor Express + Socket.io + conexion Mongo
+│   ├── seed.js                   # Carga de productos de prueba
+│   ├── config/
+│   │   └── db.js                 # Conexion a MongoDB
+│   ├── models/
+│   │   ├── product.model.js      # Schema de productos (+ paginate)
+│   │   └── cart.model.js         # Schema de carritos (ref a products)
 │   ├── managers/
-│   │   ├── ProductManager.js     # CRUD de productos con archivo JSON
-│   │   └── CartManager.js        # CRUD de carritos con archivo JSON
+│   │   ├── ProductManager.js     # Logica de productos sobre Mongoose
+│   │   └── CartManager.js        # Logica de carritos sobre Mongoose
 │   ├── routes/
-│   │   ├── products.router.js    # Rutas de API para productos
-│   │   ├── carts.router.js       # Rutas de API para carritos
+│   │   ├── products.router.js
+│   │   ├── carts.router.js
 │   │   └── views/
-│   │       └── index.router.js   # Rutas de vistas (home, realtimeproducts)
+│   │       └── index.router.js
 │   ├── views/
-│   │   ├── layouts/
-│   │   │   └── main.handlebars   # Layout principal
-│   │   ├── home.handlebars       # Vista home
-│   │   └── realTimeProducts.handlebars  # Vista con WebSocket
+│   │   ├── layouts/main.handlebars
+│   │   ├── home.handlebars
+│   │   ├── index.handlebars
+│   │   ├── productDetail.handlebars
+│   │   ├── cart.handlebars
+│   │   └── realTimeProducts.handlebars
 │   └── public/
-│       ├── css/
-│       │   └── styles.css        # Estilos
+│       ├── css/styles.css
 │       └── js/
-│           └── realtime.js       # Cliente Socket.io
+│           ├── realtime.js
+│           ├── addToCart.js
+│           └── cart.js
 ├── .env
 ├── .gitignore
 └── package.json

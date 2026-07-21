@@ -1,0 +1,47 @@
+<h2>Mi Carrito</h2>
+<p class="cart-id">ID del carrito: {{cartId}}</p>
+
+{{#unless isEmpty}}
+    <table class="cart-table">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Categoria</th>
+                <th>Precio</th>
+                <th>Cantidad</th>
+                <th>Subtotal</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#each items}}
+                <tr>
+                    <td><a href="/products/{{this._id}}">{{this.title}}</a></td>
+                    <td>{{this.category}}</td>
+                    <td>$ {{this.price}}</td>
+                    <td>{{this.quantity}}</td>
+                    <td>$ {{this.subtotal}}</td>
+                    <td>
+                        <button class="btn btn-remove" data-product="{{this._id}}" data-cart="{{../cartId}}">Quitar</button>
+                    </td>
+                </tr>
+            {{/each}}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4"><strong>Total</strong></td>
+                <td colspan="2"><strong>$ {{total}}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="product-actions">
+        <button class="btn btn-clear" data-cart="{{cartId}}">Vaciar carrito</button>
+        <a class="btn" href="/products">Seguir comprando</a>
+    </div>
+{{else}}
+    <p class="empty-message">Tu carrito esta vacio.</p>
+    <a class="btn" href="/products">Ver productos</a>
+{{/unless}}
+
+<script src="/js/cart.js"></script>
