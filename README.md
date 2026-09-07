@@ -1,6 +1,6 @@
-# Backend - API de Productos y Carritos (MongoDB) + WebSockets
+﻿# Backend - API de Ecommerce (MongoDB) + WebSockets + Autenticacion JWT
 
-Servidor Node.js + Express con Handlebars y Socket.io para la gestion de productos y carritos de compra. **Persistencia con MongoDB (Mongoose)**, consultas de productos con paginacion, filtros y ordenamiento, y gestion de carrito con referencias y `populate`.
+Servidor Node.js + Express con Handlebars y Socket.io para la gestion de productos, carritos y usuarios de una tienda. **Persistencia con MongoDB (Mongoose)**, consultas de productos con paginacion, filtros y ordenamiento, gestion de carrito con referencias y `populate`, y un sistema completo de **registro, login y sesiones protegidas con Passport + JWT**.
 
 ## Tecnologias
 
@@ -9,6 +9,10 @@ Servidor Node.js + Express con Handlebars y Socket.io para la gestion de product
 - **mongoose-paginate-v2** - Paginacion de productos
 - **Express-Handlebars** - Motor de plantillas
 - **Socket.io** - Comunicacion en tiempo real
+- **Passport + passport-local / passport-jwt** - Estrategias de autenticacion y autorizacion
+- **jsonwebtoken** - Generacion y validacion de tokens JWT
+- **bcrypt** - Encriptacion de contraseñas
+- **cookie-parser** - Manejo de cookies (guarda el token)
 - **dotenv** - Variables de entorno
 
 ## Instalacion
@@ -24,9 +28,11 @@ Crear un archivo `.env` en la raiz del proyecto:
 ```
 PORT=8080
 MONGO_URL=mongodb+srv://USUARIO:PASSWORD@CLUSTER.mongodb.net/ecommerce?retryWrites=true&w=majority
+JWT_SECRET=tu_clave_secreta_para_firmar_tokens
 ```
 
-Reemplazar `MONGO_URL` por tu cadena de conexion de MongoDB Atlas.
+- Reemplazar `MONGO_URL` por tu cadena de conexion de MongoDB Atlas.
+- `JWT_SECRET` es la clave con la que se firman/verifican los tokens. Debe mantenerse privada y no subirse a GitHub.
 
 ## Carga de datos de prueba (opcional)
 
@@ -102,6 +108,66 @@ Respuesta:
 { "products": [ { "product": "<idProducto>", "quantity": 2 } ] }
 ```
 
+### Sesiones / Autenticacion (`/api/sessions`)
+
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| POST | `/api/sessions/register` | Registra un nuevo usuario (contraseña encriptada con bcrypt y carrito propio) |
+| POST | `/api/sessions/login` | Autentica al usuario y devuelve/genera un token JWT (se guarda en cookie `token`) |
+| GET | `/api/sessions/current` | (Protegida) Valida el token JWT con la estrategia "current" y devuelve los datos del usuario |
+| GET | `/api/sessions/logout` | Cierra la sesion y limpia la cookie del token |
+
+#### POST /api/sessions/register
+
+Body:
+
+```json
+{
+  "first_name": "Juan",
+  "last_name": "Perez",
+  "email": "juan@test.com",
+  "age": 30,
+  "password": "secret123"
+}
+```
+
+#### POST /api/sessions/login
+
+Body:
+
+```json
+{ "email": "juan@test.com", "password": "secret123" }
+```
+
+Respuesta: devuelve el `token` JWT y lo deja disponible en la cookie `token` para las rutas protegidas.
+
+#### GET /api/sessions/current
+
+Debe enviarse el JWT (via cookie `token` o header `Authorization: Bearer <token>`). Devuelve los datos del usuario asociados al token:
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "id": "...",
+    "first_name": "Juan",
+    "last_name": "Perez",
+    "email": "juan@test.com",
+    "role": "user"
+  }
+}
+```
+
+### Usuarios (`/api/users`) - CRUD
+
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/api/users` | Lista todos los usuarios (sin contraseña) |
+| GET | `/api/users/:uid` | Obtiene un usuario por ID |
+| POST | `/api/users` | Crea un usuario (encripta la contraseña y le asigna un carrito) |
+| PUT | `/api/users/:uid` | Actualiza un usuario (si se envia `password`, se vuelve a encriptar) |
+| DELETE | `/api/users/:uid` | Elimina un usuario |
+
 ## Vistas con Handlebars
 
 | Ruta | Vista | Descripcion |
@@ -115,26 +181,41 @@ Respuesta:
 ## Modelos
 
 - **products**: `title, description, code (unico), price, status, stock, category, thumbnails`. Usa el plugin `mongoose-paginate-v2`.
-- **carts**: `products: [{ product: ObjectId ref 'products', quantity }]`. El `product` es una **referencia** al modelo de productos; `GET /api/carts/:cid` los trae completos mediante `populate`.
+- **carts**: `products: [{ product: ObjectId ref products, quantity }]`. El `product` es una **referencia** al modelo de productos; `GET /api/carts/:cid` los trae completos mediante `populate`.
+- **users**: `first_name, last_name, email (unico), age, password (hash bcrypt), cart (ObjectId ref carts), role (default 'user')`.
+
+## Estrategias de Passport
+
+- **register** (`passport-local`): valida campos y crea el usuario encriptando su contraseña y asignandole un carrito.
+- **login** (`passport-local`): valida email + contraseña contra la base de datos.
+- **current** (`passport-jwt`): verifica el token JWT (cookie `token` o header Bearer) y expone los datos del usuario logueado.
 
 ## Estructura del proyecto
 
 ```
 Backend/
 ├── src/
-│   ├── app.js                    # Servidor Express + Socket.io + conexion Mongo
+│   ├── app.js                    # Servidor Express + Socket.io + Middlewares (cookie, passport)
 │   ├── seed.js                   # Carga de productos de prueba
 │   ├── config/
-│   │   └── db.js                 # Conexion a MongoDB
+│   │   ├── db.js                 # Conexion a MongoDB
+│   │   └── passport.config.js    # Estrategias register, login y current (JWT)
+│   ├── utils/
+│   │   ├── password.utils.js     # Encriptacion/validacion con bcrypt
+│   │   └── jwt.utils.js          # Firmar y verificar tokens JWT
 │   ├── models/
 │   │   ├── product.model.js      # Schema de productos (+ paginate)
-│   │   └── cart.model.js         # Schema de carritos (ref a products)
+│   │   ├── cart.model.js         # Schema de carritos (ref a products)
+│   │   └── user.model.js         # Schema de usuarios (ref a carts)
 │   ├── managers/
 │   │   ├── ProductManager.js     # Logica de productos sobre Mongoose
-│   │   └── CartManager.js        # Logica de carritos sobre Mongoose
+│   │   ├── CartManager.js        # Logica de carritos sobre Mongoose
+│   │   └── UserManager.js        # CRUD de usuarios + hashing
 │   ├── routes/
 │   │   ├── products.router.js
 │   │   ├── carts.router.js
+│   │   ├── sessions.router.js    # register / login / current / logout
+│   │   ├── users.router.js       # CRUD de usuarios
 │   │   └── views/
 │   │       └── index.router.js
 │   ├── views/
