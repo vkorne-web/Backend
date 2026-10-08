@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "backend",
   "version": "1.0.0",
   "description": "",
@@ -7,6 +7,7 @@
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "seed": "node src/seed.js",
+    "seed:users": "node src/seedUsers.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -22,9 +23,11 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.8.0",
     "mongoose-paginate-v2": "^1.9.5",
+    "nodemailer": "^10.0.16",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "socket.io": "^4.8.3"
   }
 }
+

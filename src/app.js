@@ -13,6 +13,7 @@ const productsRouter = require("./routes/products.router");
 const cartsRouter = require("./routes/carts.router");
 const sessionsRouter = require("./routes/sessions.router");
 const usersRouter = require("./routes/users.router");
+const ticketsRouter = require("./routes/tickets.router");
 const viewsRouter = require("./routes/views/index.router");
 const ProductManager = require("./managers/ProductManager");
 
@@ -41,6 +42,7 @@ app.use("/api/products", productsRouter);
 app.use("/api/carts", cartsRouter);
 app.use("/api/sessions", sessionsRouter);
 app.use("/api/users", usersRouter);
+app.use("/api/tickets", ticketsRouter);
 
 // Rutas de vistas
 app.use("/", viewsRouter);

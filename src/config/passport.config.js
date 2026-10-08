@@ -3,8 +3,8 @@ const LocalStrategy = require("passport-local").Strategy;
 const JwtStrategy = require("passport-jwt").Strategy;
 const ExtractJwt = require("passport-jwt").ExtractJwt;
 
-const UserModel = require("../models/user.model");
-const CartModel = require("../models/cart.model");
+const userRepository = require("../repository/user.repository");
+const cartRepository = require("../repository/cart.repository");
 const { createHash, isValidPassword } = require("../utils/password.utils");
 
 // Clave secreta para firmar/verificar JWT. Puede venir de .env.
@@ -26,15 +26,15 @@ passport.use(
                     return done(null, false, { message: "Faltan campos obligatorios" });
                 }
 
-                const exists = await UserModel.findOne({ email });
+                const exists = await userRepository.getByEmail(email);
                 if (exists) {
                     return done(null, false, { message: "El email ya esta registrado" });
                 }
 
                 // Cada usuario nuevo recibe su propio carrito vacio.
-                const cart = await CartModel.create({ products: [] });
+                const cart = await cartRepository.create();
 
-                const user = await UserModel.create({
+                const user = await userRepository.create({
                     first_name,
                     last_name,
                     email,
@@ -61,7 +61,7 @@ passport.use(
         },
         async (email, password, done) => {
             try {
-                const user = await UserModel.findOne({ email });
+                const user = await userRepository.getByEmail(email);
                 if (!user) {
                     return done(null, false, { message: "Credenciales invalidas" });
                 }
@@ -85,7 +85,8 @@ const cookieExtractor = (req) => {
     return token;
 };
 
-// Estrategia "current": valida el token del usuario logueado.
+// Estrategia "current": valida el token y carga el usuario real desde la base.
+// Devuelve el usuario (no solo el payload) para poder aplicar autorizacion por rol.
 passport.use(
     "current",
     new JwtStrategy(
@@ -93,12 +94,19 @@ passport.use(
             secretOrKey: secretKey,
             jwtFromRequest: ExtractJwt.fromExtractors([cookieExtractor, ExtractJwt.fromAuthHeaderAsBearerToken()])
         },
-        (payload, done) => {
+        async (payload, done) => {
             try {
-                if (!payload) {
+                if (!payload || !payload.id) {
                     return done(null, false, { message: "Token invalido" });
                 }
-                return done(null, payload);
+
+                const user = await userRepository.getById(payload.id);
+                if (!user) {
+                    return done(null, false, { message: "Usuario no encontrado" });
+                }
+
+                // Devolvemos el usuario completo (sin password) para autorizacion por rol.
+                return done(null, user);
             } catch (error) {
                 return done(error);
             }

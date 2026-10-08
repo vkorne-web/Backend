@@ -1,13 +1,14 @@
-const CartModel = require("../models/cart.model");
+﻿const cartRepository = require("../repository/cart.repository");
 
+// Logica de negocio de carritos. Accede a datos a traves del Repository.
 class CartManager {
     async getCarts() {
-        return await CartModel.find().lean();
+        return await cartRepository.getAll();
     }
 
     // Trae el carrito con los productos completos mediante populate.
     async getCartById(id) {
-        const cart = await CartModel.findById(id).populate("products.product").lean();
+        const cart = await cartRepository.getById(id, { populate: true });
         if (!cart) {
             throw new Error(`Carrito con id ${id} no encontrado`);
         }
@@ -15,13 +16,12 @@ class CartManager {
     }
 
     async createCart() {
-        const newCart = await CartModel.create({ products: [] });
-        return newCart.toObject();
+        return await cartRepository.create();
     }
 
     // Agrega un producto al carrito. Si ya existe, incrementa la cantidad.
     async addProductToCart(cid, pid) {
-        const cart = await CartModel.findById(cid);
+        const cart = await cartRepository.getDocumentById(cid);
         if (!cart) {
             throw new Error(`Carrito con id ${cid} no encontrado`);
         }
@@ -34,13 +34,12 @@ class CartManager {
             cart.products[productIndex].quantity++;
         }
 
-        await cart.save();
-        return cart.toObject();
+        return await cartRepository.save(cart);
     }
 
     // Elimina un producto especifico del carrito.
     async deleteProductFromCart(cid, pid) {
-        const cart = await CartModel.findById(cid);
+        const cart = await cartRepository.getDocumentById(cid);
         if (!cart) {
             throw new Error(`Carrito con id ${cid} no encontrado`);
         }
@@ -51,27 +50,20 @@ class CartManager {
         }
 
         cart.products.splice(productIndex, 1);
-        await cart.save();
-        return cart.toObject();
+        return await cartRepository.save(cart);
     }
 
     // Reemplaza TODO el arreglo de productos del carrito.
-    // products debe ser un arreglo con la forma [{ product, quantity }, ...]
     async updateCartProducts(cid, products) {
         if (!Array.isArray(products)) {
             throw new Error("El body debe contener un arreglo de productos");
         }
 
-        const cart = await CartModel.findByIdAndUpdate(
-            cid,
-            { products },
-            { returnDocument: "after", runValidators: true }
-        );
-
+        const cart = await cartRepository.updateById(cid, { products });
         if (!cart) {
             throw new Error(`Carrito con id ${cid} no encontrado`);
         }
-        return cart.toObject();
+        return cart;
     }
 
     // Actualiza SOLO la cantidad de un producto dentro del carrito.
@@ -80,7 +72,7 @@ class CartManager {
             throw new Error("La cantidad (quantity) es obligatoria y debe ser un numero");
         }
 
-        const cart = await CartModel.findById(cid);
+        const cart = await cartRepository.getDocumentById(cid);
         if (!cart) {
             throw new Error(`Carrito con id ${cid} no encontrado`);
         }
@@ -91,22 +83,16 @@ class CartManager {
         }
 
         cart.products[productIndex].quantity = Number(quantity);
-        await cart.save();
-        return cart.toObject();
+        return await cartRepository.save(cart);
     }
 
     // Vacia el carrito (elimina todos los productos).
     async clearCart(cid) {
-        const cart = await CartModel.findByIdAndUpdate(
-            cid,
-            { products: [] },
-            { returnDocument: "after" }
-        );
-
+        const cart = await cartRepository.updateById(cid, { products: [] });
         if (!cart) {
             throw new Error(`Carrito con id ${cid} no encontrado`);
         }
-        return cart.toObject();
+        return cart;
     }
 }
 

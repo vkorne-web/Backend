@@ -1,8 +1,15 @@
-const { Router } = require('express');
+﻿const { Router } = require('express');
+const passport = require('passport');
 const CartManager = require('../managers/CartManager');
+const cartService = require('../services/cart.service');
+const { authorization } = require('../middlewares/auth.middleware');
 
 const router = Router();
 const cartManager = new CartManager();
+
+// Middlewares reutilizables.
+const authenticated = passport.authenticate('current', { session: false, failWithError: true });
+const userOnly = [authenticated, authorization('user')];
 
 // POST /api/carts - Crear un nuevo carrito
 router.post('/', async (req, res) => {
@@ -25,14 +32,34 @@ router.get('/:cid', async (req, res) => {
     }
 });
 
-// POST /api/carts/:cid/products/:pid - Agregar producto al carrito
-router.post('/:cid/products/:pid', async (req, res) => {
+// POST /api/carts/:cid/products/:pid - Agregar producto al carrito (SOLO USUARIO)
+router.post('/:cid/products/:pid', userOnly, async (req, res) => {
     try {
         const { cid, pid } = req.params;
         const updatedCart = await cartManager.addProductToCart(cid, pid);
         res.json(updatedCart);
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+});
+
+// POST /api/carts/:cid/purchase - Finalizar la compra y generar el ticket (USUARIO autenticado)
+router.post('/:cid/purchase', userOnly, async (req, res) => {
+    try {
+        const { cid } = req.params;
+        const purchaser = req.user.email;
+
+        const result = await cartService.purchaseCart(cid, purchaser);
+
+        res.json({
+            status: 'success',
+            message: 'Compra finalizada',
+            ticket: result.ticket,
+            amount: result.amount,
+            productsNotProcessed: result.productsNotProcessed
+        });
+    } catch (error) {
+        res.status(400).json({ status: 'error', error: error.message });
     }
 });
 

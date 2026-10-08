@@ -1,6 +1,6 @@
-﻿# Backend - API de Ecommerce (MongoDB) + WebSockets + Autenticacion JWT
+﻿# Backend - API de Ecommerce (MongoDB) + WebSockets + Auth JWT + Arquitectura por Capas
 
-Servidor Node.js + Express con Handlebars y Socket.io para la gestion de productos, carritos y usuarios de una tienda. **Persistencia con MongoDB (Mongoose)**, consultas de productos con paginacion, filtros y ordenamiento, gestion de carrito con referencias y `populate`, y un sistema completo de **registro, login y sesiones protegidas con Passport + JWT**.
+Servidor Node.js + Express para la gestion de productos, carritos, usuarios y compras de una tienda. Incluye **persistencia con MongoDB (Mongoose)**, **autenticacion y autorizacion con Passport + JWT**, **patron Repository (DAO/DTO)**, **sistema de recuperacion de contrasena por email** y **logica de compra con generacion de tickets**.
 
 ## Tecnologias
 
@@ -9,11 +9,26 @@ Servidor Node.js + Express con Handlebars y Socket.io para la gestion de product
 - **mongoose-paginate-v2** - Paginacion de productos
 - **Express-Handlebars** - Motor de plantillas
 - **Socket.io** - Comunicacion en tiempo real
-- **Passport + passport-local / passport-jwt** - Estrategias de autenticacion y autorizacion
-- **jsonwebtoken** - Generacion y validacion de tokens JWT
-- **bcrypt** - Encriptacion de contraseñas
-- **cookie-parser** - Manejo de cookies (guarda el token)
+- **Passport + passport-local / passport-jwt** - Estrategias de autenticacion
+- **jsonwebtoken** - Tokens JWT (sesion y recuperacion de contrasena)
+- **bcrypt** - Encriptacion de contrasenas
+- **nodemailer** - Envio de correos (recuperacion de contrasena)
+- **cookie-parser** - Manejo de cookies (guarda el token de sesion)
 - **dotenv** - Variables de entorno
+
+## Arquitectura por capas (DAO + Repository + DTO)
+
+La logica de negocio NO accede directamente a la base de datos: lo hace a traves de Repositories, que envuelven DAOs. Los DTO controlan que se expone al cliente.
+
+```
+routes / middleware  ->  managers / services (negocio)  ->  repository  ->  dao  ->  dao/models
+```
+
+- **dao/models/**: esquemas de Mongoose (`product`, `cart`, `user`, `ticket`).
+- **dao/mongo/**: Data Access Objects (acceso a la base por entidad).
+- **repository/**: capa intermedia que consume los DAO.
+- **dto/**: Data Transfer Objects (ej. `UserDTO`: solo datos no sensibles).
+- **managers/ y services/**: logica de negocio (usan los repositories).
 
 ## Instalacion
 
@@ -21,26 +36,39 @@ Servidor Node.js + Express con Handlebars y Socket.io para la gestion de product
 npm install
 ```
 
-## Configuracion
+## Configuracion (.env)
 
 Crear un archivo `.env` en la raiz del proyecto:
 
 ```
 PORT=8080
 MONGO_URL=mongodb+srv://USUARIO:PASSWORD@CLUSTER.mongodb.net/ecommerce?retryWrites=true&w=majority
-JWT_SECRET=tu_clave_secreta_para_firmar_tokens
+
+# Sesion / tokens
+JWT_SECRET=tu_clave_secreta_para_tokens_de_sesion
+JWT_RESET_SECRET=tu_clave_secreta_para_recuperacion
+
+# Mailing (recuperacion de contrasena)
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USER=tu_correo@gmail.com
+MAIL_PASS=tu_app_password
+MAIL_FROM="Ecommerce <no-reply@ecommerce.com>"
 ```
 
-- Reemplazar `MONGO_URL` por tu cadena de conexion de MongoDB Atlas.
-- `JWT_SECRET` es la clave con la que se firman/verifican los tokens. Debe mantenerse privada y no subirse a GitHub.
-
-## Carga de datos de prueba (opcional)
+## Carga de datos de prueba
 
 ```bash
-npm run seed
+npm run seed        # 24 productos
+npm run seed:users  # usuarios de prueba (admin y user)
 ```
 
-Inserta 24 productos variados (distintas categorias, precios y disponibilidad) para probar paginacion, filtros y ordenamiento.
+Usuarios de prueba creados por `seed:users`:
+
+| Email | Password | Rol |
+|-------|----------|-----|
+| admin@test.com | admin123 | admin |
+| user@test.com | user123 | user |
 
 ## Ejecucion
 
@@ -50,188 +78,123 @@ npm start
 
 El servidor se levanta en `http://localhost:8080`.
 
+## Roles y autorizacion
+
+| Accion | Rol requerido |
+|--------|---------------|
+| Ver productos (GET) | Publico |
+| Crear / Actualizar / Eliminar productos | **admin** |
+| Agregar productos al carrito / Finalizar compra | **user** |
+| CRUD de usuarios y ver tickets | **admin** |
+
+La autenticacion se hace con la estrategia **current** (JWT) y la autorizacion con el middleware `authorization('rol')`, que se ejecuta despues de `current`.
+
 ## Endpoints de API
-
-### Productos (`/api/products`)
-
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| GET | `/api/products` | Lista productos con paginacion, filtros y orden |
-| GET | `/api/products/:pid` | Obtiene un producto por ID |
-| POST | `/api/products` | Crea un nuevo producto |
-| PUT | `/api/products/:pid` | Actualiza un producto |
-| DELETE | `/api/products/:pid` | Elimina un producto |
-
-#### GET /api/products - Query params
-
-| Param | Default | Descripcion |
-|-------|---------|-------------|
-| `limit` | 10 | Cantidad de elementos por pagina |
-| `page` | 1 | Pagina solicitada |
-| `sort` | (ninguno) | `asc` / `desc` -> ordena por precio |
-| `query` | (general) | Filtro. `category:Ropa` o `status:true`. Un texto suelto se interpreta como categoria |
-
-Ejemplo: `/api/products?limit=5&page=2&sort=asc&query=category:Hogar`
-
-Respuesta:
-
-```json
-{
-  "status": "success",
-  "payload": [ /* productos */ ],
-  "totalPages": 3,
-  "prevPage": 1,
-  "nextPage": 3,
-  "page": 2,
-  "hasPrevPage": true,
-  "hasNextPage": true,
-  "prevLink": "/api/products?limit=5&page=1&sort=asc&query=category:Hogar",
-  "nextLink": "/api/products?limit=5&page=3&sort=asc&query=category:Hogar"
-}
-```
-
-### Carritos (`/api/carts`)
-
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| POST | `/api/carts` | Crea un nuevo carrito |
-| GET | `/api/carts/:cid` | Lista los productos del carrito (con `populate`) |
-| POST | `/api/carts/:cid/products/:pid` | Agrega un producto (incrementa quantity si ya existe) |
-| PUT | `/api/carts/:cid` | Reemplaza todos los productos con un arreglo enviado en el body |
-| PUT | `/api/carts/:cid/products/:pid` | Actualiza SOLO la cantidad (`quantity` en el body) |
-| DELETE | `/api/carts/:cid/products/:pid` | Elimina un producto del carrito |
-| DELETE | `/api/carts/:cid` | Vacia el carrito (elimina todos los productos) |
-
-`PUT /api/carts/:cid` espera:
-
-```json
-{ "products": [ { "product": "<idProducto>", "quantity": 2 } ] }
-```
 
 ### Sesiones / Autenticacion (`/api/sessions`)
 
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
-| POST | `/api/sessions/register` | Registra un nuevo usuario (contraseña encriptada con bcrypt y carrito propio) |
-| POST | `/api/sessions/login` | Autentica al usuario y devuelve/genera un token JWT (se guarda en cookie `token`) |
-| GET | `/api/sessions/current` | (Protegida) Valida el token JWT con la estrategia "current" y devuelve los datos del usuario |
-| GET | `/api/sessions/logout` | Cierra la sesion y limpia la cookie del token |
+| POST | `/api/sessions/register` | Registra un usuario (password con bcrypt + carrito propio) |
+| POST | `/api/sessions/login` | Autentica y genera el token JWT (cookie `token`) |
+| GET | `/api/sessions/current` | (JWT) Devuelve un **DTO** con datos NO sensibles del usuario |
+| GET | `/api/sessions/logout` | Limpia la cookie del token |
+| POST | `/api/sessions/forgot-password` | Envia un correo con boton para restablecer (expira en 1h) |
+| POST | `/api/sessions/reset-password/:token` | Restablece la contrasena (no puede ser igual a la anterior) |
 
-#### POST /api/sessions/register
-
-Body:
-
-```json
-{
-  "first_name": "Juan",
-  "last_name": "Perez",
-  "email": "juan@test.com",
-  "age": 30,
-  "password": "secret123"
-}
-```
-
-#### POST /api/sessions/login
-
-Body:
+#### POST /api/sessions/forgot-password
 
 ```json
-{ "email": "juan@test.com", "password": "secret123" }
+{ "email": "user@test.com" }
 ```
 
-Respuesta: devuelve el `token` JWT y lo deja disponible en la cookie `token` para las rutas protegidas.
-
-#### GET /api/sessions/current
-
-Debe enviarse el JWT (via cookie `token` o header `Authorization: Bearer <token>`). Devuelve los datos del usuario asociados al token:
+#### POST /api/sessions/reset-password/:token
 
 ```json
-{
-  "status": "success",
-  "payload": {
-    "id": "...",
-    "first_name": "Juan",
-    "last_name": "Perez",
-    "email": "juan@test.com",
-    "role": "user"
-  }
-}
+{ "password": "nuevaClave123" }
 ```
+
+### Productos (`/api/products`)
+
+| Metodo | Ruta | Rol | Descripcion |
+|--------|------|-----|-------------|
+| GET | `/api/products` | Publico | Lista con paginacion, filtros y orden |
+| GET | `/api/products/:pid` | Publico | Obtiene un producto por ID |
+| POST | `/api/products` | admin | Crea un producto |
+| PUT | `/api/products/:pid` | admin | Actualiza un producto |
+| DELETE | `/api/products/:pid` | admin | Elimina un producto |
+
+Query params de `GET /api/products`: `limit` (10), `page` (1), `sort` (`asc`/`desc`), `query` (`category:Ropa` o `status:true`).
+
+### Carritos (`/api/carts`)
+
+| Metodo | Ruta | Rol | Descripcion |
+|--------|------|-----|-------------|
+| POST | `/api/carts` | Publico | Crea un carrito |
+| GET | `/api/carts/:cid` | Publico | Lista los productos del carrito (populate) |
+| POST | `/api/carts/:cid/products/:pid` | user | Agrega un producto al carrito |
+| POST | `/api/carts/:cid/purchase` | user | **Finaliza la compra y genera el ticket** |
+| PUT | `/api/carts/:cid` | Publico | Reemplaza todos los productos |
+| PUT | `/api/carts/:cid/products/:pid` | Publico | Actualiza la cantidad de un producto |
+| DELETE | `/api/carts/:cid/products/:pid` | Publico | Elimina un producto del carrito |
+| DELETE | `/api/carts/:cid` | Publico | Vacia el carrito |
+
+### Tickets (`/api/tickets`)
+
+| Metodo | Ruta | Rol | Descripcion |
+|--------|------|-----|-------------|
+| GET | `/api/tickets` | admin | Lista todos los tickets |
+| GET | `/api/tickets/:tid` | admin | Obtiene un ticket por ID |
 
 ### Usuarios (`/api/users`) - CRUD
 
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| GET | `/api/users` | Lista todos los usuarios (sin contraseña) |
-| GET | `/api/users/:uid` | Obtiene un usuario por ID |
-| POST | `/api/users` | Crea un usuario (encripta la contraseña y le asigna un carrito) |
-| PUT | `/api/users/:uid` | Actualiza un usuario (si se envia `password`, se vuelve a encriptar) |
-| DELETE | `/api/users/:uid` | Elimina un usuario |
+| Metodo | Ruta | Rol | Descripcion |
+|--------|------|-----|-------------|
+| GET | `/api/users` | admin | Lista usuarios (sin password) |
+| GET | `/api/users/:uid` | admin | Obtiene un usuario |
+| POST | `/api/users` | admin | Crea un usuario |
+| PUT | `/api/users/:uid` | admin | Actualiza un usuario |
+| DELETE | `/api/users/:uid` | admin | Elimina un usuario |
 
-## Vistas con Handlebars
+## Logica de compra y tickets
 
-| Ruta | Vista | Descripcion |
-|------|-------|-------------|
-| `/` | `home.handlebars` | Listado simple de productos |
-| `/products` | `index.handlebars` | Listado con paginacion, filtros y boton "agregar al carrito" |
-| `/products/:pid` | `productDetail.handlebars` | Detalle del producto con boton "agregar al carrito" |
-| `/carts/:cid` | `cart.handlebars` | Productos de un carrito especifico (solo los suyos) |
-| `/realtimeproducts` | `realTimeProducts.handlebars` | Listado en tiempo real via WebSocket |
+`POST /api/carts/:cid/purchase`:
+
+1. Verifica el **stock** de cada producto del carrito.
+2. Si hay stock: descuenta unidades y suma al total.
+3. Si no hay stock: el producto **no** se procesa y queda en el carrito.
+4. Si al menos un producto se proceso, genera un **Ticket** con:
+   - `code` (unico), `purchase_datetime`, `amount` (total), `purchaser` (email del usuario).
+5. El carrito queda solo con los productos no procesados.
+6. Devuelve el ticket y la lista de productos no procesados (compra completa o parcial).
 
 ## Modelos
 
-- **products**: `title, description, code (unico), price, status, stock, category, thumbnails`. Usa el plugin `mongoose-paginate-v2`.
-- **carts**: `products: [{ product: ObjectId ref products, quantity }]`. El `product` es una **referencia** al modelo de productos; `GET /api/carts/:cid` los trae completos mediante `populate`.
-- **users**: `first_name, last_name, email (unico), age, password (hash bcrypt), cart (ObjectId ref carts), role (default 'user')`.
-
-## Estrategias de Passport
-
-- **register** (`passport-local`): valida campos y crea el usuario encriptando su contraseña y asignandole un carrito.
-- **login** (`passport-local`): valida email + contraseña contra la base de datos.
-- **current** (`passport-jwt`): verifica el token JWT (cookie `token` o header Bearer) y expone los datos del usuario logueado.
+- **products**: `title, description, code (unico), price, status, stock, category, thumbnails` (+ paginate).
+- **carts**: `products: [{ product: ObjectId ref products, quantity }]`.
+- **users**: `first_name, last_name, email (unico), age, password (hash), cart (ref carts), role`.
+- **tickets**: `code (unico), purchase_datetime, amount, purchaser`.
 
 ## Estructura del proyecto
 
 ```
 Backend/
 ├── src/
-│   ├── app.js                    # Servidor Express + Socket.io + Middlewares (cookie, passport)
-│   ├── seed.js                   # Carga de productos de prueba
+│   ├── app.js                    # Servidor Express + Socket.io + middlewares
+│   ├── seed.js                   # Productos de prueba
+│   ├── seedUsers.js              # Usuarios de prueba (admin y user)
 │   ├── config/
-│   │   ├── db.js                 # Conexion a MongoDB
+│   │   ├── db.js
 │   │   └── passport.config.js    # Estrategias register, login y current (JWT)
-│   ├── utils/
-│   │   ├── password.utils.js     # Encriptacion/validacion con bcrypt
-│   │   └── jwt.utils.js          # Firmar y verificar tokens JWT
-│   ├── models/
-│   │   ├── product.model.js      # Schema de productos (+ paginate)
-│   │   ├── cart.model.js         # Schema de carritos (ref a products)
-│   │   └── user.model.js         # Schema de usuarios (ref a carts)
-│   ├── managers/
-│   │   ├── ProductManager.js     # Logica de productos sobre Mongoose
-│   │   ├── CartManager.js        # Logica de carritos sobre Mongoose
-│   │   └── UserManager.js        # CRUD de usuarios + hashing
-│   ├── routes/
-│   │   ├── products.router.js
-│   │   ├── carts.router.js
-│   │   ├── sessions.router.js    # register / login / current / logout
-│   │   ├── users.router.js       # CRUD de usuarios
-│   │   └── views/
-│   │       └── index.router.js
-│   ├── views/
-│   │   ├── layouts/main.handlebars
-│   │   ├── home.handlebars
-│   │   ├── index.handlebars
-│   │   ├── productDetail.handlebars
-│   │   ├── cart.handlebars
-│   │   └── realTimeProducts.handlebars
-│   └── public/
-│       ├── css/styles.css
-│       └── js/
-│           ├── realtime.js
-│           ├── addToCart.js
-│           └── cart.js
-├── .env
-├── .gitignore
-└── package.json
+│   ├── dao/
+│   │   ├── models/               # Esquemas Mongoose (product, cart, user, ticket)
+│   │   └── mongo/                # DAO por entidad
+│   ├── repository/               # Repositories (envuelven los DAO)
+│   ├── dto/                      # Data Transfer Objects (UserDTO)
+│   ├── middlewares/              # authorization(rol)
+│   ├── managers/                 # Logica de negocio (usan repositories)
+│   ├── services/                 # auth.service, cart.service (compras)
+│   ├── routes/                   # Routers de la API
+│   ├── utils/                    # password, jwt, mailing, ticket
+│   └── ...
 ```

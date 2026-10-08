@@ -1,8 +1,16 @@
-const { Router } = require('express');
+﻿const { Router } = require('express');
+const passport = require('passport');
 const ProductManager = require('../managers/ProductManager');
+const { authorization } = require('../middlewares/auth.middleware');
 
 const router = Router();
 const productManager = new ProductManager();
+
+// Middlewares de autenticacion + autorizacion reutilizables.
+const adminOnly = [
+    passport.authenticate('current', { session: false, failWithError: true }),
+    authorization('admin')
+];
 
 // GET /api/products - Listar productos con paginacion, filtros y ordenamiento
 // Query params: limit (10), page (1), sort (asc/desc por precio), query (categoria o disponibilidad)
@@ -50,8 +58,8 @@ router.get('/:pid', async (req, res) => {
     }
 });
 
-// POST /api/products - Agregar nuevo producto
-router.post('/', async (req, res) => {
+// POST /api/products - Agregar nuevo producto (SOLO ADMIN)
+router.post('/', adminOnly, async (req, res) => {
     try {
         const { title, description, code, price, status, stock, category, thumbnails } = req.body;
         const newProduct = await productManager.addProduct({
@@ -70,8 +78,8 @@ router.post('/', async (req, res) => {
     }
 });
 
-// PUT /api/products/:pid - Actualizar producto
-router.put('/:pid', async (req, res) => {
+// PUT /api/products/:pid - Actualizar producto (SOLO ADMIN)
+router.put('/:pid', adminOnly, async (req, res) => {
     try {
         const { pid } = req.params;
         const updatedProduct = await productManager.updateProduct(pid, req.body);
@@ -81,8 +89,8 @@ router.put('/:pid', async (req, res) => {
     }
 });
 
-// DELETE /api/products/:pid - Eliminar producto
-router.delete('/:pid', async (req, res) => {
+// DELETE /api/products/:pid - Eliminar producto (SOLO ADMIN)
+router.delete('/:pid', adminOnly, async (req, res) => {
     try {
         const { pid } = req.params;
         const deletedProduct = await productManager.deleteProduct(pid);
